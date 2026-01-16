@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Web3Pay - MetaMask Gateway for WooCommerce
  * Description: Production-ready MVP: MetaMask native-coin payments with live quote, multi-chain, explorer links, RPC+pricing fallback, server verification, thank-you auto-poll, manual confirm, global anti-replay, wrong-network warning, fee buffer, admin dashboard (colorful + sparkline), WP-Cron auto-verify, system status panel, auto-cancel stale orders, and admin email notifications.
- * Version: 1.5.0
+ * Version: 1.5.1
  * Author: Shovon
  */
 
@@ -399,15 +399,17 @@ add_action('plugins_loaded', function () {
     public function enqueue_scripts() {
       if (!function_exists('is_checkout') || !is_checkout()) return;
 
-      wp_register_script('w3ps_js', '', [], '1.5.0', true);
-      wp_enqueue_script('w3ps_js');
+      // IMPORTANT: Use a real registered handle (jquery) for inline script.
+      // Some WP setups will not print inline scripts attached to an empty-src handle.
+      wp_enqueue_script('jquery');
 
       $cfg = [
         'restUrl' => esc_url_raw(rest_url('web3ps/v1')),
         'nonce'   => wp_create_nonce('wp_rest'),
         'networks'=> $this->get_networks(),
       ];
-      wp_add_inline_script('w3ps_js', $this->checkout_js($cfg));
+
+      wp_add_inline_script('jquery', $this->checkout_js($cfg));
     }
 
     public function get_networks() {
@@ -543,191 +545,212 @@ add_action('plugins_loaded', function () {
       return <<<JS
 (function(){
   const CFG = $cfgJson;
-  const \$ = (id)=>document.getElementById(id);
-  const connectBtn=\$('w3ps-connect'), netSel=\$('w3ps-network'), quoteBtn=\$('w3ps-quote'), payBtn=\$('w3ps-pay');
-  const statusEl=\$('w3ps-status'), quoteBox=\$('w3ps-quote-box'), explorerEl=\$('w3ps-explorer'), payloadEl=\$('w3ps_payload');
-  const warnEl=\$('w3ps-warning');
-  if(!connectBtn||!netSel||!quoteBtn||!payBtn||!statusEl||!quoteBox||!explorerEl||!payloadEl||!warnEl) return;
 
-  let eth=null, account=null, chainId=null, quote=null;
+  // Avoid double-binding when WooCommerce refreshes checkout fragments
+  if (window.__w3ps_sc_bound) return;
+  window.__w3ps_sc_bound = true;
 
-  function setStatus(m){ statusEl.textContent=m; }
-  function setQuoteHtml(h){ quoteBox.innerHTML=h; }
-  function setExplorerHtml(h){ explorerEl.innerHTML=h; }
-
-  function showWarn(msg){
-    warnEl.style.display = 'block';
-    warnEl.textContent = msg + ' (click here to try auto-switch)';
-  }
-  function hideWarn(){
-    warnEl.style.display = 'none';
-    warnEl.textContent = '';
+  function ready(fn){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
   }
 
-  function networks(){ return CFG.networks || []; }
-  function netById(id){ return networks().find(n=>parseInt(n.chainId,10)===parseInt(id,10)); }
+  function init(){
+    const box = document.getElementById('w3ps-box');
+    const connectBtn = document.getElementById('w3ps-connect');
+    const netSel = document.getElementById('w3ps-network');
+    const quoteBtn = document.getElementById('w3ps-quote');
+    const payBtn = document.getElementById('w3ps-pay');
+    const warningEl = document.getElementById('w3ps-warning');
+    const statusEl = document.getElementById('w3ps-status');
+    const quoteBox = document.getElementById('w3ps-quote-box');
+    const explorerBox = document.getElementById('w3ps-explorer');
+    const payloadEl = document.getElementById('w3ps_payload');
 
-  function populateNetworks(){
-    netSel.innerHTML='';
-    networks().forEach(n=>{
-      const o=document.createElement('option');
-      o.value=String(n.chainId);
-      o.textContent=n.name+' ('+n.symbol+')';
-      netSel.appendChild(o);
-    });
-  }
-
-  function enforceNetworkGate(){
-    if(!account){
-      hideWarn();
-      quoteBtn.disabled = true;
-      payBtn.disabled = true;
-      return;
-    }
-    const target = parseInt(netSel.value,10);
-    if(!chainId || chainId !== target){
-      const net = netById(target);
-      const netName = net ? net.name : ('chainId '+target);
-      showWarn('Wrong network: please switch MetaMask to '+netName+' to continue.');
-      quoteBtn.disabled = true;
-      payBtn.disabled = true;
-      quote = null;
-      setQuoteHtml('');
-      return;
-    }
-    hideWarn();
-    quoteBtn.disabled = false;
-    payBtn.disabled = !quote;
-  }
-
-  async function ensure(){
-    if(!window.ethereum) throw new Error('MetaMask not detected.');
-    eth=window.ethereum; return eth;
-  }
-
-  async function connect(){
-    const p=await ensure();
-    const acc=await p.request({method:'eth_requestAccounts'});
-    account=acc && acc[0] ? acc[0] : null;
-    const ch=await p.request({method:'eth_chainId'});
-    chainId=parseInt(ch,16);
-    setStatus('Connected: '+account+' (chainId '+chainId+')');
-    enforceNetworkGate();
-
-    eth.on('chainChanged', (chx) => {
-      chainId = parseInt(chx, 16);
-      quote = null;
-      setQuoteHtml('');
-      setExplorerHtml('');
-      enforceNetworkGate();
-    });
-    eth.on('accountsChanged', (accs) => {
-      account = accs && accs[0] ? accs[0] : null;
-      quote = null;
-      setQuoteHtml('');
-      setExplorerHtml('');
-      enforceNetworkGate();
-    });
-  }
-
-  async function switchChain(target){
-    const hex='0x'+target.toString(16);
-    await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:hex}]});
-    chainId=target;
-  }
-
-  async function post(path, body){
-    const res = await fetch(CFG.restUrl+path,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-WP-Nonce':CFG.nonce},
-      body:JSON.stringify(body)
-    });
-    const json=await res.json();
-    if(!res.ok) throw new Error(json?.error || 'Request failed');
-    return json;
-  }
-
-  async function getQuote(){
-    if(!account) throw new Error('Connect MetaMask first.');
-    const target=parseInt(netSel.value,10);
-
-    if(chainId !== target){
-      enforceNetworkGate();
-      throw new Error('Wrong network. Switch MetaMask network and retry.');
+    // Payment fields may be injected after load; if not present yet, wait.
+    if(!box || !connectBtn || !netSel || !quoteBtn || !payBtn || !warningEl || !statusEl || !quoteBox || !explorerBox || !payloadEl){
+      return false;
     }
 
-    setStatus('Requesting quote...');
-    setQuoteHtml('');
-    setExplorerHtml('');
+    const $ = (id)=>document.getElementById(id);
 
-    const q=await post('/quote',{chainId:target});
-    quote=q;
+    let eth=null, account=null, chainId=null, quote=null;
 
-    const net = netById(target);
-    const addrLink = (net && net.explorer) ? (net.explorer.replace(/\\/$/,'') + '/address/' + q.merchant) : '';
-    const explorerPart = addrLink ? ('<small>Merchant: <a href="'+addrLink+'" target="_blank" rel="noopener">view</a></small>') : '';
+    function setStatus(m){ statusEl.textContent=m || ''; }
+    function setWarning(m){
+      if(!m){ warningEl.style.display='none'; warningEl.textContent=''; return; }
+      warningEl.style.display='block'; warningEl.textContent=m;
+    }
+    function setQuoteHtml(h){ quoteBox.innerHTML=h || ''; }
+    function setExplorerHtml(h){ explorerBox.innerHTML=h || ''; }
 
-    const buf = (q.feeBufferPercent && q.feeBufferPercent > 0) ? ('<br><small>Includes fee buffer: +'+q.feeBufferPercent+'%</small>') : '';
-
-    setStatus('Quote ready. Expires in '+q.ttlSeconds+'s');
-    setQuoteHtml('<div><strong>Pay:</strong> '+q.displayAmount+' '+q.symbol+buf+'<br><small>To: '+q.merchant+'</small><br>'+explorerPart+'</div>');
-    enforceNetworkGate();
-  }
-
-  async function pay(){
-    if(!quote) throw new Error('Get a quote first.');
-    const target=parseInt(netSel.value,10);
-
-    if(chainId !== target){
-      enforceNetworkGate();
-      throw new Error('Wrong network. Switch MetaMask network and retry.');
+    function populateNetworks(){
+      netSel.innerHTML='';
+      (CFG.networks||[]).forEach(n=>{
+        const o=document.createElement('option');
+        o.value=String(n.chainId);
+        o.textContent=n.name+' ('+n.symbol+')';
+        netSel.appendChild(o);
+      });
     }
 
-    setStatus('Sending transaction...');
-    const txHash = await eth.request({
-      method:'eth_sendTransaction',
-      params:[{from:account,to:quote.merchant,value:quote.expectedWei}]
-    });
+    function networkById(id){
+      return (CFG.networks||[]).find(n=>parseInt(n.chainId,10)===parseInt(id,10)) || null;
+    }
 
-    const net = netById(target);
-    const txLink = (net && net.explorer) ? (net.explorer.replace(/\\/$/,'') + '/tx/' + txHash) : '';
-    setExplorerHtml(txLink ? ('<small>Explorer: <a href="'+txLink+'" target="_blank" rel="noopener">view transaction</a></small>') : '');
+    async function ensure(){
+      if(!window.ethereum) throw new Error('MetaMask not detected. Please install MetaMask and refresh.');
+      eth=window.ethereum; return eth;
+    }
 
-    setStatus('Tx sent: '+txHash+' — place order to confirm.');
-    payloadEl.value = JSON.stringify({
-      quoteId: quote.quoteId,
-      chainId: target,
-      merchant: quote.merchant,
-      expectedWei: quote.expectedWei,
-      from: account,
-      txHash: txHash
-    });
-  }
+    async function refreshChain(){
+      if(!eth) return;
+      const ch=await eth.request({method:'eth_chainId'});
+      chainId=parseInt(ch,16);
+      checkWrongNetwork();
+    }
 
-  populateNetworks();
-
-  netSel.addEventListener('change', () => {
-    quote = null;
-    setQuoteHtml('');
-    setExplorerHtml('');
-    enforceNetworkGate();
-  });
-
-  connectBtn.addEventListener('click', async()=>{ try{await connect();}catch(e){setStatus(e.message||'Connect failed');} });
-
-  warnEl.addEventListener('click', async () => {
-    try {
-      if (!eth || !account) return;
+    function checkWrongNetwork(){
       const target=parseInt(netSel.value,10);
-      await switchChain(target);
-      enforceNetworkGate();
-    } catch (e) {}
+      if(!chainId || chainId!==target){
+        const net = networkById(target);
+        setWarning('Wrong network in MetaMask. Please switch to '+(net?net.name:('chainId '+target))+' then retry.');
+        quoteBtn.disabled=true;
+        payBtn.disabled=true;
+        return true;
+      }
+      setWarning('');
+      quoteBtn.disabled = !account;
+      payBtn.disabled = !quote;
+      return false;
+    }
+
+    async function connect(){
+      const p=await ensure();
+      const acc=await p.request({method:'eth_requestAccounts'});
+      account=acc && acc[0] ? acc[0] : null;
+      await refreshChain();
+      setStatus('Connected: '+account);
+      checkWrongNetwork();
+    }
+
+    async function switchChain(target){
+      const hex='0x'+target.toString(16);
+      await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:hex}]});
+      chainId=target;
+      checkWrongNetwork();
+    }
+
+    async function post(path, body){
+      const res = await fetch(CFG.restUrl+path,{
+        method:'POST',
+        credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-WP-Nonce':CFG.nonce},
+        body:JSON.stringify(body)
+      });
+      const json=await res.json().catch(()=> ({}));
+      if(!res.ok) throw new Error(json?.error || 'Request failed');
+      return json;
+    }
+
+    async function getQuote(){
+      if(!account) throw new Error('Connect MetaMask first.');
+      await ensure();
+      await refreshChain();
+
+      const target=parseInt(netSel.value,10);
+      if(chainId!==target){
+        setWarning('Wrong network in MetaMask. Please switch networks to continue.');
+        try{ await switchChain(target); }
+        catch(e){ throw new Error('Please switch MetaMask network to the selected chain, then click Get Quote again.'); }
+      }
+
+      setStatus('Requesting quote...');
+      setQuoteHtml('');
+      setExplorerHtml('');
+      quote = await post('/quote',{chainId:target});
+      setStatus('Quote ready. Expires in '+quote.ttlSeconds+'s');
+      setQuoteHtml('<div><strong>Pay:</strong> '+quote.displayAmount+' '+quote.symbol+'<br><small>To: '+quote.merchant+'</small></div>');
+      if(quote.explorer && quote.merchant){
+        setExplorerHtml('<a href="'+quote.explorer+'/address/'+quote.merchant+'" target="_blank" rel="noopener">View merchant address on explorer</a>');
+      }
+      payBtn.disabled=false;
+    }
+
+    async function pay(){
+      if(!quote) throw new Error('Get a quote first.');
+      await ensure();
+      await refreshChain();
+
+      const target=parseInt(netSel.value,10);
+      if(chainId!==target){
+        setWarning('Wrong network in MetaMask. Please switch networks to continue.');
+        try{ await switchChain(target); }
+        catch(e){ throw new Error('Please switch MetaMask network to the selected chain, then click Pay Now again.'); }
+      }
+
+      setStatus('Sending transaction...');
+      const txHash = await eth.request({
+        method:'eth_sendTransaction',
+        params:[{from:account,to:quote.merchant,value:quote.expectedWei}]
+      });
+      setStatus('Tx sent: '+txHash+' — place order to confirm.');
+      payloadEl.value = JSON.stringify({
+        quoteId: quote.quoteId,
+        chainId: target,
+        merchant: quote.merchant,
+        expectedWei: quote.expectedWei,
+        from: account,
+        txHash: txHash
+      });
+
+      if(quote.explorer){
+        setExplorerHtml('<a href="'+quote.explorer+'/tx/'+txHash+'" target="_blank" rel="noopener">View transaction on explorer</a>');
+      }
+    }
+
+    // Bind once
+    populateNetworks();
+
+    connectBtn.addEventListener('click', async()=>{ try{await connect();}catch(e){setStatus(e.message||'Connect failed');} });
+
+    netSel.addEventListener('change', ()=>{ quote=null; checkWrongNetwork(); setQuoteHtml(''); setExplorerHtml(''); payloadEl.value=''; });
+
+    quoteBtn.addEventListener('click', async()=>{ try{await getQuote();}catch(e){setStatus(e.message||'Quote failed');} });
+
+    payBtn.addEventListener('click', async()=>{ try{await pay();}catch(e){setStatus(e.message||'Payment failed');} });
+
+    // React to MetaMask network/account changes
+    try{
+      ensure().then(()=>{
+        eth.on && eth.on('chainChanged', ()=>{ chainId=null; quote=null; refreshChain(); });
+        eth.on && eth.on('accountsChanged', (acc)=>{ account = acc && acc[0] ? acc[0] : null; quote=null; setStatus(account?('Connected: '+account):'Wallet disconnected'); checkWrongNetwork(); });
+      }).catch(()=>{});
+    }catch(_e){}
+
+    // Initial state
+    setStatus('Ready. Connect MetaMask to begin.');
+    quoteBtn.disabled=true;
+    payBtn.disabled=true;
+    return true;
+  }
+
+  function tryInitLoop(){
+    let attempts=0;
+    const timer=setInterval(()=>{
+      attempts++;
+      const ok = init();
+      if(ok || attempts>30) clearInterval(timer);
+    }, 300);
+  }
+
+  ready(()=>{
+    tryInitLoop();
+    // If classic checkout updates fragments, try again.
+    if (window.jQuery) {
+      window.jQuery(document.body).on('updated_checkout', function(){ window.__w3ps_sc_bound=false; tryInitLoop(); });
+    }
   });
-
-  quoteBtn.addEventListener('click', async()=>{ try{await getQuote();}catch(e){setStatus(e.message||'Quote failed');} });
-  payBtn.addEventListener('click', async()=>{ try{await pay();}catch(e){setStatus(e.message||'Payment failed');} });
-
-  enforceNetworkGate();
 })();
 JS;
     }
@@ -1481,6 +1504,14 @@ JS;
         $nets=$gw->get_networks();
         $net=w3ps_find_network($nets, $chainId);
         if(!$net) return new WP_REST_Response(['error'=>'Unsupported network'], 400);
+
+        // Ensure WooCommerce cart/session is loaded in REST context
+        if (function_exists('wc_load_cart')) {
+          wc_load_cart();
+        }
+        if (WC()->cart && method_exists(WC()->cart, 'calculate_totals')) {
+          WC()->cart->calculate_totals();
+        }
 
         if(!WC()->cart) return new WP_REST_Response(['error'=>'Cart not available'], 400);
         $totalFiat=(float)WC()->cart->get_total('edit');
