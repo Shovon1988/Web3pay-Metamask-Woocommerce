@@ -55,17 +55,13 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 - Polygon (MATIC)
 - Avalanche (AVAX)
 - Any EVM-compatible RPC
-
 ---
-
 ##  Requirements
 - WordPress 6.0+
 - WooCommerce 7.0+
 - PHP 7.4+
 - MetaMask browser extension or mobile wallet
-
 ---
-
 ##  Installation
 
 1. Download the plugin ZIP from **Releases**
@@ -76,9 +72,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
    - Merchant wallet addresses
    - Networks JSON
    - Auto-verify & auto-cancel rules
-
 ---
-
 ##  How Payments Work
 
 1. Customer selects **Crypto (MetaMask)** at checkout
@@ -105,8 +99,36 @@ Use testnets (RPC + explorer) to verify:
 - Quote accuracy
 - Auto-verification
 - Email notifications
+---
+## 📸 Screenshots
+
+### Checkout – MetaMask Payment
+![MetaMask Checkout](assets/checkout-metamask.png)
+*Customers connect MetaMask, receive a real-time crypto quote, and pay directly on-chain.*
 
 ---
+
+### Admin Dashboard – Overview
+![Dashboard Overview](assets/dashboard-overview.png)
+*A professional Web3 dashboard showing KPIs, crypto sales, and recent transactions.*
+
+---
+
+### Web3Pay Gateway Settings
+![Web3Pay Settings](assets/settings-web3pay.png)
+*Configure supported networks, merchant wallet addresses, auto-verification, and safety options.*
+
+---
+
+### WooCommerce Integration
+![WooCommerce Settings](assets/settings-woocommerce.png)
+*Web3Pay integrates seamlessly with WooCommerce payment settings.*
+
+---
+
+### WordPress Admin Integration
+![WordPress Sidebar](assets/wordpress-sidebar.png)
+*Web3Pay dashboard is accessible directly from the WooCommerce admin menu.*
 
 ##  Commercial Use
 This plugin is intended for **commercial and premium distribution**.
