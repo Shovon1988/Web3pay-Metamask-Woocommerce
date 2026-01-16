@@ -1,3 +1,7 @@
+![WooCommerce](https://img.shields.io/badge/WooCommerce-Compatible-7.0+-96588a)
+![PHP](https://img.shields.io/badge/PHP-7.4+-777bb4)
+![Version](https://img.shields.io/badge/version-1.5.0-blue)
+
 # Web3pay MetaMask WooCommerce
 
 **Web3pay MetaMask WooCommerce** is a professional Web3 payment gateway that allows WooCommerce stores to accept **on-chain cryptocurrency payments directly via MetaMask**, with automated verification, dashboards, and enterprise-grade safety checks.
