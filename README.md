@@ -6,30 +6,30 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 🚀 Key Features
+##  Key Features
 
-### 🔐 Secure MetaMask Payments
+### Secure MetaMask Payments
 - Native cryptocurrency payments (ETH, BNB, MATIC, AVAX)
 - Direct wallet-to-merchant transactions
 - No custodians, no intermediaries
 
-### ⚡ Automatic On-Chain Verification
+### Automatic On-Chain Verification
 - Background **WP-Cron auto-verification**
 - Confirms payments even if customers close their browser
 - Configurable verification intervals
 
-### 🧠 Smart Order Management
+###  Smart Order Management
 - Auto-cancel stale pending orders
 - Manual “Confirm Now” button for admins
 - Global anti-replay protection (prevents tx reuse)
 
-### 📊 Professional Admin Dashboard
+###  Professional Admin Dashboard
 - Colorful KPI cards
 - Sales overview & recent transactions
 - System Status panel (RPC, pricing, cron health)
 - Sales trend sparkline (no external libraries)
 
-### 🔎 Explorer Integration
+###  Explorer Integration
 - Etherscan, BscScan, Polygonscan, Snowtrace links
 - Available on checkout, thank-you page, admin & dashboard
 
@@ -38,18 +38,18 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 - Primary & secondary pricing API fallback
 - Cached quotes for performance
 
-### 🛡️ Payment Safety Features
+###  Payment Safety Features
 - Wrong-network detection (blocks payment on incorrect chain)
 - Optional fee buffer (%) to protect against volatility
 - Underpayment protection
 
-### ✉️ Admin Notifications
+###  Admin Notifications
 - Email alerts on confirmed or failed payments
 - Configurable recipient email
 
 ---
 
-## 🧩 Supported Networks
+##  Supported Networks
 - Ethereum (ETH)
 - Binance Smart Chain (BNB)
 - Polygon (MATIC)
@@ -58,7 +58,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 📦 Requirements
+##  Requirements
 - WordPress 6.0+
 - WooCommerce 7.0+
 - PHP 7.4+
@@ -66,7 +66,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 🔧 Installation
+##  Installation
 
 1. Download the plugin ZIP from **Releases**
 2. WordPress Admin → Plugins → Add New → Upload Plugin
@@ -79,7 +79,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 🧠 How Payments Work
+##  How Payments Work
 
 1. Customer selects **Crypto (MetaMask)** at checkout
 2. Wallet connects & network is validated
@@ -91,7 +91,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 🔒 Security & Best Practices
+##  Security & Best Practices
 - No private keys stored
 - No custodial wallets
 - No background blockchain listeners
@@ -100,7 +100,7 @@ Designed for merchants who want **reliable crypto payments without complexity**.
 
 ---
 
-## 🧪 Test Before Going Live
+##  Test Before Going Live
 Use testnets (RPC + explorer) to verify:
 - Quote accuracy
 - Auto-verification
@@ -108,7 +108,7 @@ Use testnets (RPC + explorer) to verify:
 
 ---
 
-## 📈 Commercial Use
+##  Commercial Use
 This plugin is intended for **commercial and premium distribution**.
 
 For licensing, support, or custom development:
@@ -116,10 +116,10 @@ For licensing, support, or custom development:
 
 ---
 
-## 📝 Changelog
+##  Changelog
 See **Releases** for full version history.
 
 ---
 
-## ⭐ Why Web3pay?
+##  Why Web3pay?
 Because merchants deserve crypto payments that feel as reliable as Stripe — without giving up decentralization.
