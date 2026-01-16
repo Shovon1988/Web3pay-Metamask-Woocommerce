@@ -1,6 +1,10 @@
-![WooCommerce](https://img.shields.io/badge/WooCommerce-Compatible-7.0+-96588a)
-![PHP](https://img.shields.io/badge/PHP-7.4+-777bb4)
-![Version](https://img.shields.io/badge/version-1.5.0-blue)
+# Web3pay MetaMask WooCommerce
+
+![WooCommerce](https://img.shields.io/badge/WooCommerce-7.0%2B-96588a?logo=woocommerce&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?logo=php&logoColor=white)
+![Version](https://img.shields.io/badge/Version-1.5.0-blue)
+![MetaMask](https://img.shields.io/badge/Wallet-MetaMask-f6851b?logo=metamask&logoColor=white)
+
 
 # Web3pay MetaMask WooCommerce
 
