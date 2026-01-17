@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: Web3Pay - MetaMask Gateway for WooCommerce
+ * Plugin Name: Web3Pay - MetaMask Gateway for WooCommerce.
  * Description: Production-ready MVP: MetaMask native-coin payments with live quote, multi-chain, explorer links, RPC+pricing fallback, server verification, thank-you auto-poll, manual confirm, global anti-replay, wrong-network warning, fee buffer, admin dashboard (colorful + sparkline), WP-Cron auto-verify, system status panel, auto-cancel stale orders, and admin email notifications.
  * Version: 1.5.1
  * Author: Shovon
@@ -1595,3 +1595,4 @@ JS;
   });
 
 });
+
