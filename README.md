@@ -143,6 +143,14 @@ This plugin is intended for **commercial and premium distribution**.
 
 For licensing, support, or custom development:
 **Contact the author**
+---
+## 📄 License
+
+This project is released under a **commercial license**.
+
+© 2026 Pixel Art. All rights reserved.
+
+Unauthorized copying, redistribution, or resale is prohibited.
 
 ---
 
