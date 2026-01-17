@@ -2,7 +2,7 @@
 
 ![WooCommerce](https://img.shields.io/badge/WooCommerce-7.0%2B-96588a?logo=woocommerce&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?logo=php&logoColor=white)
-![Version](https://img.shields.io/badge/Version-1.5.0-blue)
+![Version](https://img.shields.io/badge/Version-1.5.1-blue)
 ![MetaMask](https://img.shields.io/badge/Wallet-MetaMask-f6851b?logo=metamask&logoColor=white)
 
 
