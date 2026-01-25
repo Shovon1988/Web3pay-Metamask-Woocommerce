@@ -1,18 +1,13 @@
 <?php
 /**
- * Plugin Name: Web3Pay - MetaMask Gateway for WooCommerce.
- * Description: Production-ready MVP: MetaMask native-coin payments with live quote, multi-chain, explorer links, RPC+pricing fallback, server verification, thank-you auto-poll, manual confirm, global anti-replay, wrong-network warning, fee buffer, admin dashboard (colorful + sparkline), WP-Cron auto-verify, system status panel, auto-cancel stale orders, and admin email notifications.
- * Version: 1.5.1
+ * Plugin Name: KiwiPay Crypto - MetaMask Gateway for WooCommerce
+ * Description: MetaMask native-coin payments with live quote, multi-chain, explorer links, RPC+pricing fallback, server verification, thank-you auto-poll, manual confirm, global anti-replay, wrong-network warning, fee buffer, admin dashboard (colorful + sparkline), WP-Cron auto-verify, system status panel, auto-cancel stale orders, and admin email notifications.
+ * Version: 1.6.0
  * Author: Shovon
+ * License: pixel Art NZ
  */
 
 if (!defined('ABSPATH')) exit;
-
-/**
- * NOTE:
- * This is a single-file WooCommerce payment gateway plugin.
- * Install as: wp-content/plugins/web3pay-simple-commercial/web3pay-simple-commercial.php
- */
 
 // ---------- Cron scheduling helpers (global scope for activation/deactivation) ----------
 function w3ps_sc_cron_clear() {
@@ -35,7 +30,7 @@ add_filter('cron_schedules', function ($schedules) {
   foreach ([5,10,15,30] as $m) {
     $key = 'w3ps_sc_every_'.$m.'min';
     if (!isset($schedules[$key])) {
-      $schedules[$key] = ['interval' => $m * 60, 'display' => "Every {$m} minutes (Web3Pay)"];
+      $schedules[$key] = ['interval' => $m * 60, 'display' => "Every {$m} minutes (KiwiPay Crypto)"];
     }
   }
   return $schedules;
@@ -256,10 +251,10 @@ add_action('plugins_loaded', function () {
   // ------------------------
   // Gateway
   // ------------------------
-  class WC_Gateway_Web3Pay_Simple_Commercial extends WC_Payment_Gateway {
+  class WC_Gateway_KiwiPay_Crypto_Simple_Commercial extends WC_Payment_Gateway {
     public function __construct() {
-      $this->id = 'web3pay_simple_commercial';
-      $this->method_title = __('Web3Pay (MetaMask) - Simple', 'web3ps');
+      $this->id = 'kiwipay_simple_commercial';
+      $this->method_title = __('KiwiPay Crypto (MetaMask) - Simple', 'web3ps');
       $this->method_description = __('Production-ready MVP: native-coin payments with dashboard + cron.', 'web3ps');
       $this->has_fields = true;
       $this->supports = ['products'];
@@ -282,7 +277,7 @@ add_action('plugins_loaded', function () {
         'enabled' => [
           'title'=>__('Enable/Disable','web3ps'),
           'type'=>'checkbox',
-          'label'=>__('Enable Web3Pay','web3ps'),
+          'label'=>__('Enable KiwiPay Crypto','web3ps'),
           'default'=>'no',
         ],
         'title' => [
@@ -413,29 +408,68 @@ add_action('plugins_loaded', function () {
     }
 
     public function get_networks() {
-      $n = json_decode($this->get_option('networks','[]'), true);
-      if (!is_array($n) || empty($n)) $n = w3ps_default_networks();
+    // Load Networks JSON saved in settings. Make it tolerant to:
+    // - chainid vs chainId
+    // - smart quotes
+    // - trailing commas
+    // - slashes added by WP
+        $raw = $this->get_option('networks', '');
+        if (is_string($raw)) $raw = wp_unslash($raw);
 
-      $out=[];
-      foreach($n as $x){
-        if (empty($x['chainId']) || empty($x['name']) || empty($x['symbol']) || empty($x['merchant']) || empty($x['coingecko_id'])) continue;
+        // Normalize common “copy/paste” problems
+        if (is_string($raw) && $raw !== '') {
+         // smart quotes -> normal quotes
+        $raw = str_replace(["\xE2\x80\x9C","\xE2\x80\x9D","\xE2\x80\x98","\xE2\x80\x99"], ['"','"',"'", "'"], $raw);
+        // remove trailing commas before } or ]
+        $raw = preg_replace('/,\s*([}\]])/', '$1', $raw);
+    }
+
+    $n = json_decode($raw === '' ? '[]' : $raw, true);
+
+    // If decode fails or empty, fallback to defaults (but we will not return empty)
+    if (!is_array($n) || empty($n)) {
+        $n = w3ps_default_networks();
+    }
+
+    $out = [];
+    foreach ($n as $x) {
+    // Accept common variants from pasted JSON
+        if (empty($x['chainId']) && !empty($x['chainid'])) $x['chainId'] = $x['chainid'];
+        if (empty($x['chainId']) && !empty($x['chain_id'])) $x['chainId'] = $x['chain_id'];
+        if (empty($x['merchant']) && !empty($x['address'])) $x['merchant'] = $x['address'];
+        if (empty($x['coingecko_id']) && !empty($x['coingeckoId'])) $x['coingecko_id'] = $x['coingeckoId'];
+
+        if (empty($x['chainId']) || empty($x['name']) || empty($x['symbol']) || empty($x['merchant']) || empty($x['coingecko_id'])) {
+            continue;
+        }
+
+        $merchant = trim((string)$x['merchant']);
+
+        // If merchant is invalid, skip it (prevents 0xYourEthAddress ever reaching checkout)
+        if (!preg_match('/^0x[a-fA-F0-9]{40}$/', $merchant)) {
+            continue;
+        }
 
         $rpc = $x['rpc'] ?? '';
         if (is_string($rpc) && $rpc !== '') $rpc = [$rpc];
-        if (!is_array($rpc) || empty($rpc)) continue;
+        if (!is_array($rpc) || empty($rpc)) {
+            continue;
+        }
 
         $out[] = [
-          'chainId'=>(int)$x['chainId'],
-          'name'=>sanitize_text_field($x['name']),
-          'symbol'=>sanitize_text_field($x['symbol']),
-          'merchant'=>sanitize_text_field($x['merchant']),
-          'rpc'=>array_values(array_map('esc_url_raw', $rpc)),
-          'explorer'=>esc_url_raw($x['explorer'] ?? ''),
-          'coingecko_id'=>sanitize_text_field($x['coingecko_id']),
+            'chainId'      => (int)$x['chainId'],
+            'name'         => sanitize_text_field($x['name']),
+            'symbol'       => sanitize_text_field($x['symbol']),
+            'merchant'     => $merchant,
+            'rpc'          => array_values(array_map('esc_url_raw', $rpc)),
+            'explorer'     => esc_url_raw($x['explorer'] ?? ''),
+            'coingecko_id' => sanitize_text_field($x['coingecko_id']),
         ];
-      }
-      return $out;
     }
+
+        // If everything was filtered out, return a safe empty array and let JS show a clear admin message.
+    return $out;
+}
 
     public function payment_fields() {
       echo '<div id="w3ps-box" style="margin:10px 0">';
@@ -506,7 +540,7 @@ add_action('plugins_loaded', function () {
       $status = $order->get_meta('_w3ps_status');
 
       echo '<div class="order_data_column">';
-      echo '<h4>Web3Pay</h4>';
+      echo '<h4>KiwiPay Crypto</h4>';
       echo '<p><strong>Status:</strong> '.esc_html($status ?: 'n/a').'</p>';
       echo '<p><strong>Tx:</strong> <span style="font-family:monospace">'.esc_html($tx ?: 'n/a').'</span></p>';
 
@@ -532,7 +566,7 @@ add_action('plugins_loaded', function () {
       $result = w3ps_verify_order_tx($order, $this->get_networks(), $this);
 
       if (!$result['ok']) {
-        $order->add_order_note('Web3Pay manual confirm: '.$result['error']);
+        $order->add_order_note('KiwiPay Crypto manual confirm: '.$result['error']);
         $order->save();
       }
 
@@ -585,14 +619,25 @@ add_action('plugins_loaded', function () {
     function setExplorerHtml(h){ explorerBox.innerHTML=h || ''; }
 
     function populateNetworks(){
-      netSel.innerHTML='';
-      (CFG.networks||[]).forEach(n=>{
+        netSel.innerHTML='';
+        const list = (CFG.networks||[]);
+        if(!list.length){
+        const o=document.createElement('option');
+        o.value='';
+        o.textContent='No networks configured';
+        netSel.appendChild(o);
+        quoteBtn.disabled=true;
+        payBtn.disabled=true;
+        setWarning('No networks configured. Please open WooCommerce → Payments → this gateway → Networks (simple JSON), fix and Save.');
+        return;
+    }
+    list.forEach(n=>{
         const o=document.createElement('option');
         o.value=String(n.chainId);
         o.textContent=n.name+' ('+n.symbol+')';
         netSel.appendChild(o);
-      });
-    }
+    });
+}
 
     function networkById(id){
       return (CFG.networks||[]).find(n=>parseInt(n.chainId,10)===parseInt(id,10)) || null;
@@ -612,13 +657,12 @@ add_action('plugins_loaded', function () {
 
     function checkWrongNetwork(){
       const target=parseInt(netSel.value,10);
-      if(!chainId || chainId!==target){
-        const net = networkById(target);
-        setWarning('Wrong network in MetaMask. Please switch to '+(net?net.name:('chainId '+target))+' then retry.');
+        if(!target){
+        setWarning('No valid network selected. Please configure Networks in admin and refresh checkout.');
         quoteBtn.disabled=true;
         payBtn.disabled=true;
         return true;
-      }
+    }
       setWarning('');
       quoteBtn.disabled = !account;
       payBtn.disabled = !quote;
@@ -1054,8 +1098,8 @@ JS;
   add_action('admin_menu', function () {
     add_submenu_page(
       'woocommerce',
-      'Web3Pay Dashboard',
-      'Web3Pay Dashboard',
+      'KiwiPay Crypto Dashboard',
+      'KiwiPay Crypto Dashboard',
       'manage_woocommerce',
       'w3ps-dashboard',
       'w3ps_admin_dashboard_page'
@@ -1065,7 +1109,7 @@ JS;
   function w3ps_admin_dashboard_page() {
     if (!current_user_can('manage_woocommerce')) return;
 
-    $gw = new WC_Gateway_Web3Pay_Simple_Commercial();
+    $gw = new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
     $nets = $gw->get_networks();
     $gateway_id = $gw->id;
 
@@ -1089,7 +1133,7 @@ JS;
     );
 
     echo '<div class="wrap">';
-    echo '<h1 style="display:flex;gap:10px;align-items:center">Web3Pay Dashboard <span style="font-size:13px;color:#666;font-weight:600">('.esc_html($rangeLabel).')</span></h1>';
+    echo '<h1 style="display:flex;gap:10px;align-items:center">KiwiPay Crypto Dashboard <span style="font-size:13px;color:#666;font-weight:600">('.esc_html($rangeLabel).')</span></h1>';
 
     // System Status panel
     w3ps_admin_system_status_panel($gw, $nets);
@@ -1173,7 +1217,7 @@ JS;
     }
 
     if ($rows === 0) {
-      echo '<tr><td colspan="7" style="text-align:center;padding:18px;color:#666">No Web3Pay orders found for this range.</td></tr>';
+      echo '<tr><td colspan="7" style="text-align:center;padding:18px;color:#666">No KiwiPay Crypto orders found for this range.</td></tr>';
     }
 
     echo '</tbody></table></div>';
@@ -1185,7 +1229,7 @@ JS;
     if (!current_user_can('manage_woocommerce')) wp_die('Forbidden');
     check_admin_referer('w3ps_export_csv');
 
-    $gw = new WC_Gateway_Web3Pay_Simple_Commercial();
+    $gw = new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
     $nets = $gw->get_networks();
     $gateway_id = $gw->id;
 
@@ -1193,7 +1237,7 @@ JS;
     $orders = w3ps_admin_query_orders($gateway_id, $start_ts, $end_ts, 5000);
 
     header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename=web3pay-transactions.csv');
+    header('Content-Disposition: attachment; filename=kiwipay-transactions.csv');
 
     $out = fopen('php://output', 'w');
     fputcsv($out, ['order_id','date','order_total','currency','w3ps_status','chain_id','expected','tx_hash','payer']);
@@ -1223,7 +1267,7 @@ JS;
   // ------------------------
   // Thank you page polling + explorer link
   // ------------------------
-  add_action('woocommerce_thankyou_web3pay_simple_commercial', function ($order_id) {
+  add_action('woocommerce_thankyou_kiwipay_simple_commercial', function ($order_id) {
     $order = wc_get_order($order_id);
     if (!$order) return;
 
@@ -1231,7 +1275,7 @@ JS;
     $chainId = (int)$order->get_meta('_w3ps_chain_id');
     if (!$txHash || !$chainId) return;
 
-    $gw = new WC_Gateway_Web3Pay_Simple_Commercial();
+    $gw = new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
     $nets = $gw->get_networks();
     $net = w3ps_find_network($nets, $chainId);
 
@@ -1324,17 +1368,17 @@ JS;
     $status = isset($r['status']) ? hexdec($r['status']) : 0;
     if ($status !== 1) {
       $order->update_meta_data('_w3ps_status','failed');
-      $order->add_order_note('Web3Pay: Tx failed: '.$txHash);
+      $order->add_order_note('KiwiPay Crypto: Tx failed: '.$txHash);
       $order->save();
 
       // Email notify (once)
-      if ($gw instanceof WC_Gateway_Web3Pay_Simple_Commercial) {
+      if ($gw instanceof WC_Gateway_KiwiPay_Crypto_Simple_Commercial) {
         $to = trim((string)$gw->get_option('admin_email_to', get_option('admin_email')));
         $enabled = ($gw->get_option('email_on_failed','yes') === 'yes');
         $sent = (string)$order->get_meta('_w3ps_notified_failed');
         if ($enabled && $sent !== '1') {
           w3ps_sc_notify_admin(
-            '[Web3Pay] Payment FAILED for Order #'.$order_id,
+            '[KiwiPay Crypto] Payment FAILED for Order #'.$order_id,
             "Order #{$order_id} payment failed on-chain.\n\nTx: {$txHash}\nNetwork: {$net['name']} ({$chainId})",
             $to
           );
@@ -1365,11 +1409,11 @@ JS;
     $order->update_meta_data('_w3ps_status','confirmed');
     $order->update_meta_data('_w3ps_tx_hash', strtolower($txHash));
     $order->update_meta_data('_w3ps_from', sanitize_text_field($t['from']??''));
-    $order->add_order_note('Web3Pay: Payment confirmed. Tx: '.$txHash);
+    $order->add_order_note('KiwiPay Crypto: Payment confirmed. Tx: '.$txHash);
     $order->save();
 
     // Email notify (once)
-    if ($gw instanceof WC_Gateway_Web3Pay_Simple_Commercial) {
+    if ($gw instanceof WC_Gateway_KiwiPay_Crypto_Simple_Commercial) {
       $to = trim((string)$gw->get_option('admin_email_to', get_option('admin_email')));
       $enabled = ($gw->get_option('email_on_confirmed','yes') === 'yes');
       $sent = (string)$order->get_meta('_w3ps_notified_confirmed');
@@ -1377,7 +1421,7 @@ JS;
         $txUrl = w3ps_explorer_tx_url($net, $txHash);
         $msg = "Order #{$order_id} payment confirmed.\n\nNetwork: {$net['name']} ({$chainId})\nTx: {$txHash}\n";
         if ($txUrl) $msg .= "Explorer: {$txUrl}\n";
-        w3ps_sc_notify_admin('[Web3Pay] Payment CONFIRMED for Order #'.$order_id, $msg, $to);
+        w3ps_sc_notify_admin('[KiwiPay Crypto] Payment CONFIRMED for Order #'.$order_id, $msg, $to);
         $order->update_meta_data('_w3ps_notified_confirmed','1');
         $order->save();
       }
@@ -1392,7 +1436,7 @@ JS;
   add_action('w3ps_sc_cron_tick', function () {
     if (!class_exists('WooCommerce')) return;
 
-    $gw = new WC_Gateway_Web3Pay_Simple_Commercial();
+    $gw = new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
     $enabled = ($gw->get_option('cron_enabled','yes') === 'yes');
 
     if (!$enabled) {
@@ -1450,7 +1494,7 @@ JS;
 
             if ($shouldCancel) {
               if ($order->has_status(['pending','on-hold'])) {
-                $order->update_status('cancelled', 'Web3Pay: Auto-cancelled stale pending order ('.$staleMin.' min).');
+                $order->update_status('cancelled', 'KiwiPay Crypto: Auto-cancelled stale pending order ('.$staleMin.' min).');
                 // Keep internal status consistent for dashboard
                 $order->update_meta_data('_w3ps_status', 'failed');
                 $order->save();
@@ -1493,7 +1537,7 @@ JS;
         $body=$req->get_json_params();
         $chainId=isset($body['chainId'])?(int)$body['chainId']:0;
 
-        $gw=new WC_Gateway_Web3Pay_Simple_Commercial();
+        $gw=new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
         $fiat=strtoupper(trim((string)$gw->get_option('fiat_currency', get_woocommerce_currency())));
         $ttl=max(60,(int)$gw->get_option('quote_ttl',600));
 
@@ -1572,7 +1616,7 @@ JS;
           $order->save();
         }
 
-        $gw=new WC_Gateway_Web3Pay_Simple_Commercial();
+        $gw=new WC_Gateway_KiwiPay_Crypto_Simple_Commercial();
         $nets=$gw->get_networks();
 
         $result = w3ps_verify_order_tx($order, $nets, $gw);
@@ -1590,9 +1634,8 @@ JS;
   // Register Gateway
   // ------------------------
   add_filter('woocommerce_payment_gateways', function ($g) {
-    $g[] = 'WC_Gateway_Web3Pay_Simple_Commercial';
+    $g[] = 'WC_Gateway_KiwiPay_Crypto_Simple_Commercial';
     return $g;
   });
 
 });
-
